@@ -6,7 +6,7 @@ library(boot)
 
 # Load data
 base_path <- dirname(rstudioapi::getSourceEditorContext()$path)
-dfx = droplevels(read.csv(file.path(base_path, 'responses_long_format.csv')))
+df = droplevels(read.csv(file.path(base_path, 'responses_main_study_long.csv')))
 
 ## Snippet function: Summarize responses across groups
 response_summary <- function(d, splitvars=NULL, valuevar='answer', filterval=TRUE){
@@ -43,7 +43,7 @@ response_summary_bs <- function(data, indices, long_data, splitvars) {
 
 # Main manuscript
 ## Figure 1: Source vs. content effects
-dfx %>% filter(relevant_for_analysis, group=='control') -> d
+df %>% filter(relevant_for_analysis, group=='control') -> d
 d %>% group_by(subject_id) %>% slice(1) %>% mutate(strata=paste(study,subject_politics)) -> d_groups
 boot(d_groups, strata=factor(d_groups$strata), statistic=response_summary_bs, stype='f', R=1000, 
      long_data=d, splitvars=c('source_alignment', 'headline_alignment', 'study')) -> bs
@@ -52,7 +52,7 @@ d %>% response_summary(splitvars=c('source_alignment', 'headline_alignment','stu
   rowwise() %>% mutate(
     lower_bs = boot.ci(bs, type="bca", index=row)['bca'][[1]][4],
     upper_bs = boot.ci(bs, type="bca", index=row)['bca'][[1]][5],
-    headline_alignment = ifelse(headline_alignment, 'Agreeable content', 'Disagreeable content'),
+    headline_alignment = ifelse(headline_alignment, 'Favorable content', 'Unfavorable content'),
     source_alignment = ifelse(source_alignment, 'Trusted source', 'Mistrusted source')
   ) -> d_graph
 
@@ -65,13 +65,13 @@ d_graph %>%
   geom_point(size=3, position=pos) + geom_line(pos=pos) + 
   scale_color_manual(values=c('black', '#c12b1e')) + facet_grid(~study) + 
   scale_y_continuous(labels = scales::percent_format(accuracy = 5L)) + #limits = c(0.365, 0.72)
-  labs(x='Source trust', y='Percent who believe the headline', 
-       color='Content agreeability') + 
+  labs(x='Source attribution', y='Percent who believe the headline', 
+       color='Content alignment') + 
   theme_bw() + theme(legend.position='right', axis.text=element_text(size=9.3),
                      axis.title.x = element_text(margin = margin(t = 6, r = 0, b = 0, l = 0))) 
 
 ## Figure 2: Incentive treatment
-dfx %>% filter(relevant_for_analysis) -> d
+df %>% filter(relevant_for_analysis) -> d
 d %>% group_by(subject_id) %>% slice(1) %>% mutate(strata=paste(study,subject_politics, group)) -> d_groups
 boot(d_groups, strata=factor(d_groups$strata), statistic=response_summary_bs, stype='f', R=1000, 
      long_data=d, splitvars=c('group', 'headline_alignment','study')) -> bs
@@ -80,7 +80,7 @@ d %>% response_summary(splitvars=c('group', 'headline_alignment', 'study')) %>%
   rowwise() %>% mutate(
     lower_bs = boot.ci(bs, type="bca", index=row)['bca'][[1]][4],
     upper_bs = boot.ci(bs, type="bca", index=row)['bca'][[1]][5],
-    headline_alignment = ifelse(headline_alignment, 'Agreeable content', 'Disagreeable content'),
+    headline_alignment = ifelse(headline_alignment, 'Favorable content', 'Unfavorable content'),
     group = ifelse(group=='control', 'Without incentives', 'With incentives'),
     group = factor(group, levels=c('Without incentives', 'With incentives'))
   ) -> d_graph
@@ -89,21 +89,21 @@ d_graph %>%
   mutate(study = recode(study, 'Study 1'='A. Strong Ideological Content', 
                         'Study 2'='B. Weak Ideological Content')) %>%
   ggplot(aes(y=estimate, x=group, color=headline_alignment, group=headline_alignment)) +
-  geom_errorbar(aes(ymin=lower, ymax=upper), width=0.1, pos=pos) +
+  geom_errorbar(aes(ymin=lower_bs, ymax=upper_bs), width=0.1, pos=pos) +
   geom_point(size=3, position=pos) + geom_line(pos=pos) + 
   scale_color_manual(values=c('black', '#c12b1e')) + facet_grid(~study) + 
   scale_y_continuous(labels = scales::percent_format(accuracy = 5L)) + # limits = c(0.38, 0.71)
-  labs(x='Accuracy incentives', y='Percent who believe the headline', color='Content agreeability') + 
+  labs(x='Accuracy incentives', y='Percent who believe the headline', color='Content alignment') + 
   theme_bw() + theme(legend.position='right', axis.text=element_text(size=9.3),
                      axis.title.x = element_text(margin = margin(t = 6, r = 0, b = 0, l = 0)))
 
 # Supplement
 ## Figure 1, additional analysis
 ### Split news evaluations by participant ideology 
-dfx %>% filter(relevant_for_analysis, group=='control') %>%
+df %>% filter(relevant_for_analysis, group=='control') %>%
   response_summary(splitvars=c('source_alignment', 'headline_alignment','demo_ideology_forced')) %>% 
   rowwise() %>% mutate(
-    headline_alignment = ifelse(headline_alignment, 'Agreeable content', 'Disagreeable content'),
+    headline_alignment = ifelse(headline_alignment, 'Favorable content', 'Unfavorable content'),
     source_alignment = ifelse(source_alignment, 'Trusted source', 'Mistrusted source'),
     demo_ideology_forced = recode(demo_ideology_forced, 'Left or center-left'='Participants leaning liberal', 
                                   'Right or center-right'='Participants leaning conservative')
@@ -113,37 +113,39 @@ dfx %>% filter(relevant_for_analysis, group=='control') %>%
   geom_point(size=3, position=pos) + geom_line(pos=pos) + 
   scale_color_manual(values=c('black', '#c12b1e')) + facet_grid(~demo_ideology_forced) + 
   scale_y_continuous(labels = scales::percent_format(accuracy = 5L)) + #limits = c(0.365, 0.72)
-  labs(x='Source trust', y='Percent who believe the headline', 
-       color='Content agreeability') + 
+  labs(x='Source attribution', y='Percent who believe the headline', 
+       color='Content alignment') + 
   theme_bw() + theme(legend.position='right', axis.text=element_text(size=9.3),
                      axis.title.x = element_text(margin = margin(t = 6, r = 0, b = 0, l = 0))) 
 
-### Split news evaluations by participant party identification 
-dfx %>% filter(relevant_for_analysis, group=='control') %>%
+### Analyze news evaluations by participant party identification 
+df %>% filter(relevant_for_analysis, group=='control') %>%
   filter(demo_party %in% c('Democrat', 'Republican')) %>%
   mutate(
     party_ideology = recode(demo_party, 'Democrat'='liberal', 'Republican'='conservative'),
     source_alignment = party_ideology == source_politics,
     headline_alignment = party_ideology == headline_politics,
   ) %>%
-  response_summary(splitvars=c('source_alignment', 'headline_alignment','demo_party')) %>% 
+  response_summary(splitvars=c('source_alignment', 'headline_alignment','study')) %>% 
   rowwise() %>% mutate(
-    headline_alignment = ifelse(headline_alignment, 'Agreeable content', 'Disagreeable content'),
+    headline_alignment = ifelse(headline_alignment, 'Favorable content', 'Unfavorable content'),
     source_alignment = ifelse(source_alignment, 'Trusted source', 'Mistrusted source'),
-    demo_party = paste(demo_party, 'participants')
+    # demo_party = paste(demo_party, 'participants')
   ) %>%
+  mutate(study = recode(study, 'Study 1'='A. Strong Ideological Content', 
+                        'Study 2'='B. Weak Ideological Content')) %>%
   ggplot(aes(y=estimate, x=source_alignment, color=headline_alignment, group=headline_alignment)) +
   geom_errorbar(aes(ymin=lower, ymax=upper), width=0.1, pos=pos) +
   geom_point(size=3, position=pos) + geom_line(pos=pos) + 
-  scale_color_manual(values=c('black', '#c12b1e')) + facet_grid(~demo_party) + 
+  scale_color_manual(values=c('black', '#c12b1e')) + facet_grid(~study) + 
   scale_y_continuous(labels = scales::percent_format(accuracy = 5L)) + #limits = c(0.365, 0.72)
-  labs(x='Source trust', y='Percent who believe the headline', 
-       color='Content agreeability') + 
+  labs(x='Source attribution', y='Percent who believe the headline', 
+       color='Content alignment') + 
   theme_bw() + theme(legend.position='right', axis.text=element_text(size=9.3),
                      axis.title.x = element_text(margin = margin(t = 6, r = 0, b = 0, l = 0))) 
 
-### Filter responses based on source trust match
-dfx %>% rowwise() %>%
+### Only show responses where the source trust manipulation succeeded
+df %>% rowwise() %>%
   filter(relevant_for_analysis, group=='control') %>%
   mutate(
     source_trust_match = ifelse((source_trust_num >= 0.5) == (source_alignment), 'match', 'deviate')
@@ -151,7 +153,7 @@ dfx %>% rowwise() %>%
   response_summary(splitvars=c('source_alignment', 'headline_alignment','study')) %>% 
   rowwise() %>% mutate(
     study = recode(study, 'Study 1'='A. Strong Ideological Content', 'Study 2'='B. Weak Ideological Content'),
-    headline_alignment = ifelse(headline_alignment, 'Agreeable content', 'Disagreeable content'),
+    headline_alignment = ifelse(headline_alignment, 'Favorable content', 'Unfavorable content'),
     source_alignment = ifelse(source_alignment, 'Trusted source', 'Mistrusted source'),
   ) %>%
   ggplot(aes(y=estimate, x=source_alignment, color=headline_alignment, group=headline_alignment)) +
@@ -159,17 +161,17 @@ dfx %>% rowwise() %>%
   geom_point(size=3, position=pos) + geom_line(pos=pos) + 
   scale_color_manual(values=c('black', '#c12b1e')) + facet_grid(~study) + 
   scale_y_continuous(labels = scales::percent_format(accuracy = 5L)) + #limits = c(0.365, 0.72)
-  labs(x='Source trust', y='Percent who believe the headline', 
-       color='Content agreeability') + 
+  labs(x='Source attribution', y='Percent who believe the headline', 
+       color='Content alignment') + 
   theme_bw() + theme(legend.position='right', axis.text=element_text(size=9.3),
                      axis.title.x = element_text(margin = margin(t = 6, r = 0, b = 0, l = 0))) 
 
 ## Figure 2, additional analyses
 ### Split news evaluations by participant ideology 
-dfx %>% filter(relevant_for_analysis) %>%
+df %>% filter(relevant_for_analysis) %>%
   response_summary(splitvars=c('group', 'headline_alignment','demo_ideology_forced')) %>% 
   rowwise() %>% mutate(
-    headline_alignment = ifelse(headline_alignment, 'Agreeable content', 'Disagreeable content'),
+    headline_alignment = ifelse(headline_alignment, 'Favorable content', 'Unfavorable content'),
     demo_ideology_forced = recode(demo_ideology_forced, 'Left or center-left'='Participants leaning liberal', 
                                   'Right or center-right'='Participants leaning conservative'),
     group = recode(group, control='Without incentives', bonus='With incentives'),
@@ -181,40 +183,41 @@ dfx %>% filter(relevant_for_analysis) %>%
   scale_color_manual(values=c('black', '#c12b1e')) + facet_grid(~demo_ideology_forced) + 
   scale_y_continuous(labels = scales::percent_format(accuracy = 5L)) + #limits = c(0.365, 0.72)
   labs(x='Accuracy incentives', y='Percent who believe the headline', 
-       color='Content agreeability') + 
+       color='Content alignment') + 
   theme_bw() + theme(legend.position='right', axis.text=element_text(size=9.3),
                      axis.title.x = element_text(margin = margin(t = 6, r = 0, b = 0, l = 0))) 
 
-### Split news evaluations by participant party identification 
-dfx %>% filter(relevant_for_analysis) %>%
+### Analyze news evaluations by participant party identification 
+df %>% filter(relevant_for_analysis) %>%
   filter(demo_party %in% c('Democrat', 'Republican')) %>%
   mutate(
     party_ideology = recode(demo_party, 'Democrat'='liberal', 'Republican'='conservative'),
     source_alignment = party_ideology == source_politics,
     headline_alignment = party_ideology == headline_politics,
   ) %>%
-  response_summary(splitvars=c('group', 'headline_alignment','demo_party')) %>% 
+  response_summary(splitvars=c('group', 'headline_alignment','study')) %>% 
   rowwise() %>% mutate(
-    headline_alignment = ifelse(headline_alignment, 'Agreeable content', 'Disagreeable content'),
+    headline_alignment = ifelse(headline_alignment, 'Favorable content', 'Unfavorable content'),
     group = recode(group, control='Without incentives', bonus='With incentives'),
-    group = factor(group, levels=c('Without incentives', 'With incentives')),
-    demo_party = paste(demo_party, 'participants')
+    group = factor(group, levels=c('Without incentives', 'With incentives'))
   ) %>%
+  mutate(study = recode(study, 'Study 1'='A. Strong Ideological Content', 
+                        'Study 2'='B. Weak Ideological Content')) %>%
   ggplot(aes(y=estimate, x=group, color=headline_alignment, group=headline_alignment)) +
   geom_errorbar(aes(ymin=lower, ymax=upper), width=0.1, pos=pos) +
   geom_point(size=3, position=pos) + geom_line(pos=pos) + 
-  scale_color_manual(values=c('black', '#c12b1e')) + facet_grid(~demo_party) + 
+  scale_color_manual(values=c('black', '#c12b1e')) + facet_grid(~study) + 
   scale_y_continuous(labels = scales::percent_format(accuracy = 5L)) + #limits = c(0.365, 0.72)
   labs(x='Accuracy incentives', y='Percent who believe the headline', 
-       color='Content agreeability') + 
+       color='Content alignment') + 
   theme_bw() + theme(legend.position='right', axis.text=element_text(size=9.3),
                      axis.title.x = element_text(margin = margin(t = 6, r = 0, b = 0, l = 0))) 
 
-### Split news evaluations by source trust
-dfx %>% filter(relevant_for_analysis) %>%
+### Only show responses where the source trust manipulation succeeded
+df %>% filter(relevant_for_analysis) %>%
   response_summary(splitvars=c('group', 'headline_alignment','source_alignment')) %>% 
   rowwise() %>% mutate(
-    headline_alignment = ifelse(headline_alignment, 'Agreeable content', 'Disagreeable content'),
+    headline_alignment = ifelse(headline_alignment, 'Favorable content', 'Unfavorable content'),
     group = recode(group, control='Without incentives', bonus='With incentives'),
     group = factor(group, levels=c('Without incentives', 'With incentives')),
     source_alignment = ifelse(source_alignment, 'Trusted source', 'Mistrusted source'),
@@ -225,13 +228,13 @@ dfx %>% filter(relevant_for_analysis) %>%
   scale_color_manual(values=c('black', '#c12b1e')) + facet_grid(~source_alignment) + 
   scale_y_continuous(labels = scales::percent_format(accuracy = 5L)) + #limits = c(0.365, 0.72)
   labs(x='Accuracy incentives', y='Percent who believe the headline', 
-       color='Content agreeability') + 
+       color='Content alignment') + 
   theme_bw() + theme(legend.position='right', axis.text=element_text(size=9.3),
                      axis.title.x = element_text(margin = margin(t = 6, r = 0, b = 0, l = 0))) 
 
-## Validating the source trust manipulation
-### Source trust ratings by source name and participant idelogy
-dfx %>% 
+## Source and content manipulation checks
+### Source attribution ratings by source name and participant ideology
+df %>% 
   filter(relevant_for_analysis, group=='control') %>%
   mutate(
     subject_politics = recode(subject_politics, liberal='Liberal', conservative='Conservative'),
@@ -256,29 +259,30 @@ dfx %>%
   ) %>%
   ggplot(aes(x=source, y=mean, fill=subject_politics, group=subject_politics)) +
   geom_bar(stat='identity', width=0.5, color='white', position=position_dodge(), alpha=0.8) + # position="dodge"
-  scale_fill_manual(values=c('#020a7b','#c12b1e')) + facet_grid(~study, scales='free_x',space = "free_x") + 
+  scale_fill_manual(values=c('#c12b1e','#020a7b')) + facet_grid(~study, scales='free_x',space = "free_x") + 
   geom_errorbar(aes(ymin=lower, ymax=upper), color='black', width=0.18, position=position_dodge(width=0.5)) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 5L)) +
-  labs(fill = "Participant politics", color='', x='Source name', y='Mean source trust') +
+  labs(fill = "Participant politics", color='', x='News source', y='Trust rating') +
   theme_bw() + theme(legend.position='right', axis.text=element_text(size=9.3),
                      axis.title.x = element_text(margin = margin(t = 6, r = 0, b = 0, l = 0)))
 
-# Show correlation between source trust in study design and post-study survey
+### Correlation between source attribution in study design and post-study survey
 pos = position_dodge(width = 0.15)
-dfx %>% 
-  filter(relevant_for_analysis, group=='control') %>%
-  group_by(source_trust, source_alignment) %>%
-  summarise(count = n()) %>% group_by(source_alignment) %>%
+df %>% 
+  # filter(relevant_for_analysis, group=='control') %>%
+  group_by(source_trust, source_alignment, study) %>%
+  summarise(count = n()) %>% group_by(source_alignment, study) %>%
   mutate(
     percentage = count/sum(count),
-    percentage_text = ifelse(source_trust != 'Entirely', paste0(round(percentage * 100), '%'), ''),
+    # percentage_text = ifelse(source_trust != 'Entirely', paste0(round(percentage * 100), '%'), ''),
+    percentage_text = ifelse(percentage > 0.1, paste0(round(percentage * 100), '%'), ''),
     # source_trust = factor(source_trust, levels=c('Low', 'Moderate','High')),
     source_trust = factor(source_trust, levels=rev(c('Not at all', 'Barely','Somewhat','A lot','Entirely'))),
     source_alignment = ifelse(source_alignment, 'Trusted source', 'Mistrusted source'),
   ) %>% 
   ggplot(aes(x=source_alignment, y=percentage, fill=source_trust, group = source_trust)) +
   geom_bar(stat='identity', width=0.5, color='white') + # position="dodge"
-  geom_bar(stat='identity', width=0.5, fill='white', alpha=0.25) +
+  geom_bar(stat='identity', width=0.5, fill='white', alpha=0.25) + facet_grid(~study) +
   geom_text(aes(label=percentage_text), position = position_stack(vjust = .5)) +
   # scale_fill_manual(values=c('#c12b1e','darkgrey', 'black')) +
   # scale_fill_manual(values=c('#c12b1e', '#ae6353', '#898989', '#434343', '#000000')) +
@@ -286,13 +290,56 @@ dfx %>%
   # geom_errorbar(aes(ymin=lower, ymax=upper, y=mean, group=label), color='black', data=trust_summary, width=0.05, pos=pos) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 5L)) +
   # geom_line(aes(y=mean, color=label, group=label), data=trust_summary) + 
-  scale_color_manual(values=c('black')) + labs(fill = "Source trust according\nto post-study survey", color='', x='Source trust in the study design', y='Percent who trust the source') +
+  scale_color_manual(values=c('black')) + labs(fill = "Reported source trust\n(post-study survey)", color='', x='Source classification (study design)', y='Percent who trust the source') +
   theme_bw() + theme(legend.position='right', axis.text=element_text(size=9.3),
                      axis.title.x = element_text(margin = margin(t = 6, r = 0, b = 0, l = 0))) 
 
+cor.test(as.numeric(dfx$source_trust_num >= 0.5), as.numeric(dfx$source_alignment))
+agreements = sum((dfx$source_trust_num >= 0.5) == dfx$source_alignment)
+random_agreement = sum(sample(dfx$source_trust_num >= 0.5) == dfx$source_alignment)
+kappa = (agreements/nrow(dfx)-random_agreement/nrow(dfx))/(1-random_agreement/nrow(dfx)) # 0.37
+  
+### Crrelation between content alignment in study design and in the independent pre-study robustness check
+droplevels(read.csv(file.path(base_path, 'responses_pretest_long.csv'))) %>%
+  mutate(study = ifelse(grepl('x', df_pre$headline), 'Study 1', 'Study 2')) -> df_pre
+
+df_pre %>% 
+  filter(group == 'ideology') %>%
+  filter(ideology != "") %>%
+  group_by(headline_politics, ideology_num, study) %>%
+  summarise(count = n()) %>% group_by(headline_politics, study) %>%
+  mutate(
+    percentage = count/sum(count),
+    percentage_text = paste0(round(percentage * 100), '%'),
+    ideology_text = ifelse(ideology_num < 0, "Favorable to liberals", 
+                           ifelse(ideology_num > 0, "Favorable to conservatives", 
+                                  "Politically neutral")),
+    headline_politics = recode(headline_politics, Dem="Favorable to\nliberals", Rep="Favorable to\nconservatives"),
+    ideology_text = factor(ideology_text, levels=c("Favorable to liberals", "Politically neutral","Favorable to conservatives"))
+  ) %>%
+  ggplot(aes(x=headline_politics, y=percentage, fill=ideology_text, group = ideology_text)) +
+  geom_bar(stat='identity', width=0.5, color='white') + # position="dodge"
+  geom_bar(stat='identity', width=0.5, fill='white', alpha=0.25) +
+  geom_text(aes(label=percentage_text), position = position_stack(vjust = .5)) +
+  scale_fill_manual(values=c('#020a7b','grey','#c12b1e')) + facet_grid(~study) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 5L)) +
+  scale_color_manual(values=c('black')) + labs(fill = "Content alignment labels\n(independent survey)", color='', 
+                          x='Content classification (study design)', y='Percent of content labels') +
+  theme_bw() + theme(legend.position='right', axis.text=element_text(size=9.3),
+                     axis.title.x = element_text(margin = margin(t = 6, r = 0, b = 0, l = 0))) 
+
+df_pre %>% filter(group == 'ideology') %>% mutate(random_politics = sample(headline_politics)) -> d
+cor.test(as.numeric(d$headline_politics=='Dem'), as.numeric(d$ideology_num<0))
+cor.test(as.numeric(d$headline_politics=='Rep'), as.numeric(d$ideology_num>0))
+agreements = sum(ifelse(d$headline_politics=='Dem'&d$ideology_num<0, 1, 
+                        ifelse(d$headline_politics=='Rep'& d$ideology_num>0, 1, 0)))
+random_agreement = sum(ifelse(d$random_politics=='Dem'&d$ideology_num<0, 1, 
+                              ifelse(d$random_politics=='Rep'& d$ideology_num>0, 1, 0)))
+kappa = (agreements/nrow(d)-random_agreement/nrow(d))/(1-random_agreement/nrow(d)) # 0.16
+
 ## Statistical modeling
 ### Regression models
-dfx %>% 
+df %>% 
   filter(relevant_for_analysis, study=='Study 1') %>% #
   # filter(group == 'control') %>%
   # filter(demo_party %in% c('Democrat','Republican')) %>%
@@ -304,7 +351,7 @@ dfx %>%
   # glmer(formula = answer ~ headline_alignment*group + source_alignment*group + (1|source), family=binomial) %>% summary()
   lm(formula = answer ~ headline_alignment*group + source_alignment*group) %>% summary
 
-dfx %>% 
+df %>% 
   filter(relevant_for_analysis) %>% 
   lm(formula = source_trust_num ~ source_alignment) %>% summary()
 
@@ -315,7 +362,7 @@ stargazer(m1, m2, m3, type='html', out='model2.doc',
           star.cutoffs = c(.05, .01, .001))
 
 ### Moderator analysis
-dfx %>% 
+df %>% 
   filter(relevant_for_analysis) %>% #
   mutate(
     demo_education = recode(demo_education, 'Less than a high school diploma'=0, 'High school degree or equivalent (e.g. GED)'=1, 
@@ -328,9 +375,9 @@ dfx %>%
   ) %>%
   lm(formula = submit_time ~ group) %>% summary
 
-# Additional analyses (not included in the supplement)
-## New belief by source and participant ideology
-  dfx %>% mutate(
+## Additional analyses (not included in the supplement)
+## News belief by source name and participant ideology
+  df %>% mutate(
     # source = recode(source, cnn='CNN', huff='Huffington Post', nyt='New York Times', fox='Fox News', drudge='Drudge Report', bbart='Breitbart'),
     source = ifelse(study == 'Study 1', paste0(' ', source), source),
     source = str_to_title(source),
@@ -354,8 +401,8 @@ dfx %>%
                      axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
                      axis.title.x = element_text(margin = margin(t = 6, r = 0, b = 0, l = 0))) 
 
-## Effect of headline agreeability, per headline
-dfx %>% 
+## Disagreement on individual headlines by participant ideology
+df %>% 
   filter(relevant_for_analysis) %>% 
   response_summary(splitvars=c('study', 'headline', 'headline_politics', 'headline_alignment')) %>%
   # rbind(list("Study 2","Rep_10", "conservative", FALSE, TRUE,1, 1, 0.03, 0, 0.2, 1)) %>%
@@ -382,14 +429,14 @@ dfx %>%
   scale_color_manual(values=c('#c12b1e','#020a7b')) +
   # facet_grid(c(~headline_politics, ~study), scales='free_x', space='free_x') + 
   scale_y_continuous(labels = scales::percent_format(accuracy = 5L)) + #
-  labs(x='Headline', y='Content agreeability effect', 
+  labs(x='Headline', y='Content alignment effect', 
        color='Headline \nideology') + 
   theme_bw() + theme(legend.position='right', axis.text=element_text(size=9.3),
                      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
                      axis.title.x = element_text(margin = margin(t = 6, r = 0, b = 0, l = 0))) 
 
-## Reduction of headline agreeability effect due to accuracy treatment
-dfx %>% 
+## Reduction of headline disagreement due to accuracy treatment
+df %>% 
   filter(relevant_for_analysis) %>% 
   response_summary(splitvars=c('study', 'group', 'headline', 'headline_politics', 'headline_alignment')) %>%
   rbind(list("Study 2","control", "Rep_10", "conservative", FALSE, TRUE,1, 1, 0.03, 0, 0.2, 1)) %>%
