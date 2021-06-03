@@ -301,7 +301,9 @@ kappa = (agreements/nrow(dfx)-random_agreement/nrow(dfx))/(1-random_agreement/nr
   
 ### Crrelation between content alignment in study design and in the independent pre-study robustness check
 droplevels(read.csv(file.path(base_path, 'responses_pretest_long.csv'))) %>%
-  mutate(study = ifelse(grepl('x', df_pre$headline), 'Study 1', 'Study 2')) -> df_pre
+  mutate(study = ifelse(grepl('x', headline), 'Study 1', 'Study 2')) -> df_pre
+
+table(df_pre$ideology)
 
 df_pre %>% 
   filter(group == 'ideology') %>%
@@ -338,59 +340,77 @@ random_agreement = sum(ifelse(d$random_politics=='Dem'&d$ideology_num<0, 1,
 kappa = (agreements/nrow(d)-random_agreement/nrow(d))/(1-random_agreement/nrow(d)) # 0.16
 
 ## Statistical modeling
-### Regression models
+### Regression model
+df$study
 df %>% 
-  filter(relevant_for_analysis, study=='Study 1') %>% #
-  # filter(group == 'control') %>%
-  # filter(demo_party %in% c('Democrat','Republican')) %>%
+  filter(relevant_for_analysis) %>% #
+  filter(study == 'Study 2') %>%
   mutate(
     headline_alignment = ifelse(headline_alignment,'aligned','misaligned'),
     source_alignment = ifelse(source_alignment,'aligned','misaligned'),
     group = factor(group, levels = c('control','bonus'))
   ) %>%
-  # glmer(formula = answer ~ headline_alignment*group + source_alignment*group + (1|source), family=binomial) %>% summary()
-  lm(formula = answer ~ headline_alignment*group + source_alignment*group) %>% summary
-
+  glm(formula = answer ~ headline_alignment*group + source_alignment*group, family=binomial(link='logit')) %>% summary()
+  
 df %>% 
-  filter(relevant_for_analysis) %>% 
-  lm(formula = source_trust_num ~ source_alignment) %>% summary()
-
-class(m1) <- "lmerMod"
-class(m2) <- "lmerMod"
-class(m3) <- "lmerMod"
-stargazer(m1, m2, m3, type='html', out='model2.doc',
-          star.cutoffs = c(.05, .01, .001))
+  filter(relevant_for_analysis, group=='control',headline_alignment!=source_alignment) %>%
+  glm(formula = answer ~ headline_alignment, family=binomial(link='logit')) %>% summary()
 
 ### Moderator analysis
 df %>% 
-  filter(relevant_for_analysis) %>% #
+  filter(relevant_for_analysis, group=='control') %>% #
   mutate(
-    demo_education = recode(demo_education, 'Less than a high school diploma'=0, 'High school degree or equivalent (e.g. GED)'=1, 
+    demo_gender = ifelse(demo_gender=='Other', 'Female', demo_gender),
+    demo_education = recode(demo_education, 'Less than a high school diploma'=0, 'High school degree or equivalent (e.g. GED)'=1,
                             'Bachelor’s degree (e.g. BA, BS)'=2, 'Doctorate (e.g. PhD, EdD)'=4,
-                            'Associate degree (e.g. AA, AS) '=2, 'Master’s degree (e.g. MA, MS)'=3, 'Professional degree (e.g. MD, JD)'=3),
+                            'Associate degree (e.g. AA, AS)'=2, 'Master’s degree (e.g. MA, MS)'=3, 'Professional degree (e.g. MD, JD)'=3),
     demo_ideology_strength = recode(demo_ideology, 'conservative'=1, 'liberal'=1, 'no opinion'=0, 'somewhat conservative'=0.5,
                                     'somewhat liberal'=0.5),
     headline_alignment = ifelse(headline_alignment,'aligned','misaligned'),
     source_alignment = ifelse(source_alignment,'aligned','misaligned')
   ) %>%
-  lm(formula = submit_time ~ group) %>% summary
+  # glm(formula = answer ~ headline_alignment*demo_education + source_alignment*demo_education, family=binomial(link='logit')) -> m1
+  # glm(formula = answer ~ headline_alignment*demo_age + source_alignment*demo_age, family=binomial(link='logit')) -> m2
+  # glm(formula = answer ~ headline_alignment*demo_gender + source_alignment*demo_gender, family=binomial(link='logit')) -> m3
+  glm(formula = answer ~ headline_alignment*demo_ideology_strength + source_alignment*demo_ideology_strength, family=binomial(link='logit')) -> m4
+
+df %>% 
+  filter(relevant_for_analysis) %>%
+  mutate(
+    demo_education = recode(demo_education, 'Less than a high school diploma'=0, 'High school degree or equivalent (e.g. GED)'=1,
+                            'Bachelor’s degree (e.g. BA, BS)'=2, 'Doctorate (e.g. PhD, EdD)'=4,
+                            'Associate degree (e.g. AA, AS)'=2, 'Master’s degree (e.g. MA, MS)'=3, 'Professional degree (e.g. MD, JD)'=3),
+    demo_ideology_strength = recode(demo_ideology, 'conservative'=1, 'liberal'=1, 'no opinion'=0, 'somewhat conservative'=0.5,
+                                    'somewhat liberal'=0.5),
+    headline_alignment = ifelse(headline_alignment,'aligned','misaligned'),
+    source_alignment = ifelse(source_alignment,'aligned','misaligned'),
+    group = factor(group, levels = c('control', 'bonus'))
+  ) %>% 
+  # glm(formula = answer ~ headline_alignment*group*demo_education, family=binomial(link='logit')) -> m6
+  # glm(formula = answer ~ headline_alignment*group*demo_age, family=binomial(link='logit')) -> m7
+  # glm(formula = answer ~ headline_alignment*group*submit_time, family=binomial(link='logit')) -> m8
+  glm(formula = answer ~ headline_alignment*group*demo_ideology_strength, family=binomial(link='logit'))-> m9
+
+library(stargazer)
+summary(m8)
+stargazer(m1, m2, m3, m4, type='html', out='~/model2.doc',
+          star.cutoffs = c(.05, .01, .001))
+stargazer(m6, m7, m8, m9, type='html', out='~/model3.doc',
+          star.cutoffs = c(.05, .01, .001))
 
 ## Additional analyses (not included in the supplement)
 ## News belief by source name and participant ideology
-  df %>% mutate(
-    # source = recode(source, cnn='CNN', huff='Huffington Post', nyt='New York Times', fox='Fox News', drudge='Drudge Report', bbart='Breitbart'),
-    source = ifelse(study == 'Study 1', paste0(' ', source), source),
-    source = str_to_title(source),
-    source = recode(source, 'Itv'='ITV', 'Cnn'='CNN', 'Nypost'='NYPost')
-  ) %>%
+  df %>% 
   response_summary(splitvars=c('subject_politics', 'study', 'source')) %>%
-  group_by(source, study) %>% mutate(
-    cred_liberal = ifelse(subject_politics=='liberal', estimate, 0),
-    cred_conservative = ifelse(subject_politics=='conservative', estimate, 0),
-    subject_politics = recode(subject_politics, liberal='Liberal', conservative='Conservative'),
-    cred_diff = sum(cred_liberal) - sum(cred_conservative)
-  ) %>%
-  ggplot(aes(y=estimate, x=reorder(source, cred_diff), color=subject_politics, group=subject_politics)) +
+    mutate(
+      source = recode(source, bbart='Breitbart\nNews', cnn='CNN', 
+                      drudge='Drudge\nReport',fox='Fox\nNews',
+                      nyt='New York\nTimes', huff='Huffington\nPost'),
+      source = factor(source, levels = c('Breitbart\nNews', 'Drudge\nReport', 'Fox\nNews',
+                                         'New York\nTimes', 'Huffington\nPost', 'CNN')),
+      # source = ifelse(study == 'Study 1', paste0(' ', source), source),
+    ) %>%
+  ggplot(aes(y=estimate, x=source, color=subject_politics, group=subject_politics)) +
   geom_errorbar(aes(ymin=lower, ymax=upper), width=0.2, alpha=0.5, pos=pos) +
   geom_point(size=2.5, position=pos) +
   scale_color_manual(values=c('#c12b1e','#020a7b')) + facet_grid(~study, scales='free_x', space='free_x') + 
@@ -398,9 +418,9 @@ df %>%
   labs(x='Source', y='Percent who believe the source', 
        color='Participant\nideology') + 
   theme_bw() + theme(legend.position='right', axis.text=element_text(size=9.3),
-                     axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
                      axis.title.x = element_text(margin = margin(t = 6, r = 0, b = 0, l = 0))) 
 
+  
 ## Disagreement on individual headlines by participant ideology
 df %>% 
   filter(relevant_for_analysis) %>% 
